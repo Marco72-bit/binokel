@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Binockel">
-<title>Binockel</title>
+<meta name="apple-mobile-web-app-title" content="Binokel">
+<title>Binokel</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -181,7 +181,7 @@ input[type=number]{-moz-appearance:textfield}
 <div class="screen on" id="s-home">
   <div class="hdr">
     <div class="hdr-row">
-      <div><div class="logo">Binockel</div><div class="logo-sub">Spielstand</div></div>
+      <div><div class="logo">Binokel</div><div class="logo-sub">Spielstand</div></div>
       <button class="btn btn-ghost" style="white-space:nowrap;flex-shrink:0" onclick="showNewSessionSheet()">+ Neue Session</button>
     </div>
   </div>
@@ -404,17 +404,18 @@ function renderSessionGames(sess) {
   }).join('');
 
   // Running total + live settlement
-  var allRanked = sess.players.map(function(p){return{n:p.n,t:allTots[p.id]||0,id:p.id};}).sort(function(a,b){return b.t-a.t;});
   var liveSettle = calcSessionSettle(sess);
+  var liveBal = calcSessionBalanceMap(sess);
   var settleHtml = '';
   if (liveSettle.length > 0) {
     settleHtml = '<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px;display:flex;flex-direction:column;gap:5px">' +
+      '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:4px">Vorläufige Verrechnung</div>' +
       liveSettle.map(function(s){
         return '<div style="display:flex;align-items:center;gap:7px;font-size:13px">' +
           '<span style="color:var(--cream2)">'+esc(s.from)+'</span>' +
           '<span style="color:var(--muted)">→</span>' +
           '<span style="color:var(--gold)">'+esc(s.to)+'</span>' +
-          '<span style="margin-left:auto;font-weight:600;color:var(--green)">'+fmt(s.amt)+'</span>' +
+          '<span style="margin-left:auto;font-weight:700;color:var(--green)">'+fmt(s.amt)+'</span>' +
           '</div>';
       }).join('') +
       '</div>';
@@ -422,11 +423,17 @@ function renderSessionGames(sess) {
     settleHtml = '<div style="margin-top:8px;font-size:12px;color:var(--muted)">🎉 Alle gleich – keine Zahlungen</div>';
   }
   var totRow = '<div style="background:var(--surface);border:1px solid var(--gold);border-radius:var(--r);margin:4px 14px 14px;padding:12px 14px">' +
-    '<div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:8px">Aktueller Gesamtstand</div>' +
-    '<div style="display:flex;flex-wrap:wrap;gap:8px">' +
+    '<div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:10px">Gesamtstand (alle Spiele)</div>' +
+    '<div style="display:flex;flex-direction:column;gap:6px">' +
     sess.players.map(function(p){
-      var t=allTots[p.id]||0; var cls=t>0?'pos':t<0?'neg':'z';
-      return '<span class="gb-score '+cls+'" style="font-size:14px;font-weight:600">'+esc(p.n)+': '+(t>0?'+':'')+t+' Pkt</span>';
+      var t=allTots[p.id]||0; var b=liveBal[p.id]||0;
+      var cls=b>0?'pos':b<0?'neg':'z';
+      var bStr=b>0?'+'+fmt(b):b<0?'−'+fmt(-b):'±0';
+      return '<div style="display:flex;align-items:center;gap:8px">' +
+        '<span style="flex:1;font-size:14px;font-weight:500;color:var(--cream2)">'+esc(p.n)+'</span>' +
+        '<span style="font-size:12px;color:var(--muted)">'+( t>0?'+':'')+t+' Pkt</span>' +
+        '<span class="gb-score '+cls+'" style="font-size:14px;font-weight:700;min-width:70px;text-align:right">'+bStr+'</span>' +
+        '</div>';
     }).join('') +
     '</div>' + settleHtml + '</div>';
 
@@ -778,42 +785,55 @@ function showSessSum() {
   var allTots={};
   sess.players.forEach(function(p){allTots[p.id]=0;});
   var breakdownRows='';
+
+  // Per-game breakdown: points + euro (from calcGameBalanceById = winner-takes-all per game)
   sess.games.forEach(function(g){
     if(!g.done)return;
     var gt=calcTotals(g,sess.players);
+    var gb=calcGameBalanceById(g,sess.players,sess.pv);
     var scores=sess.players.map(function(p){
       var t=gt[p.id]||0; var cls=t>0?'pos':t<0?'neg':'z';
       allTots[p.id]+=t;
-      return '<span class="gb-score '+cls+'">'+esc(p.n)+': '+(t>0?'+':'')+t+' Pkt</span>';
+      var b=gb[p.id]||0; var bStr=b>0.05?'+'+fmt(b):b<-0.05?'−'+fmt(-b):'±0';
+      return '<span class="gb-score '+cls+'">'+esc(p.n)+': '+(t>0?'+':'')+t+' Pkt'
+        +'<span style="opacity:.8;font-size:12px"> ('+bStr+')</span></span>';
     }).join('');
     breakdownRows+='<div class="gb-row"><div class="gb-name">'+esc(g.name)+'</div><div class="gb-scores">'+scores+'</div></div>';
   });
 
-  var ranked=sess.players.map(function(p){return {id:p.id,n:p.n,t:allTots[p.id]||0};}).sort(function(a,b){return b.t-a.t;});
+  // Net euro balance = sum of per-game winner-takes-all amounts
+  var balMap=calcSessionBalanceMap(sess);
+  var ranked=sess.players.map(function(p){
+    return {id:p.id,n:p.n,t:allTots[p.id]||0,b:balMap[p.id]||0};
+  }).sort(function(a,b){return b.b-a.b;});
+
   var medals=['🥇','🥈','🥉']; var rankCls=['g','s','b'];
   var rankHtml=ranked.map(function(p,i){
-    var cls=p.t>0?'pos':p.t<0?'neg':'z';
-    return '<div class="rank-row'+(i===0?' r1':'')+'"><div class="rnk '+(rankCls[i]||'')+'">'+
-      (medals[i]||((i+1)+'.'))+
-      '</div><div class="rname">'+esc(p.n)+'</div><div class="rscore '+cls+'">'+
-      (p.t>0?'+':'')+p.t+' Pkt</div></div>';
+    var cls=p.b>0.05?'pos':p.b<-0.05?'neg':'z';
+    var bStr=p.b>0.05?'+'+fmt(p.b):p.b<-0.05?'−'+fmt(-p.b):'±0';
+    return '<div class="rank-row'+(i===0?' r1':'')+'">'+
+      '<div class="rnk '+(rankCls[i]||'')+'">'+( medals[i]||((i+1)+'.'))+' </div>'+
+      '<div class="rname">'+esc(p.n)+'<div style="font-size:11px;color:var(--muted);margin-top:1px">'+(p.t>0?'+':'')+p.t+' Pkt gesamt</div></div>'+
+      '<div class="rscore '+cls+'">'+bStr+'</div></div>';
   }).join('');
+
   var settle=calcSessionSettle(sess);
   var payHtml=settle.length===0
     ? '<div class="nopay">Alle gleich – keine Zahlungen 🎉</div>'
     : settle.map(function(s){
         return '<div class="pay-row"><div class="pfrom">'+esc(s.from)+'</div><div class="parrow">→</div><div class="pto">'+esc(s.to)+'</div><div class="pamount">'+fmt(s.amt)+'</div></div>';
       }).join('');
+
   var doneCount=sess.games.filter(function(g){return g.done;}).length;
   document.getElementById('ss-body').innerHTML =
     '<div class="sum-hdr"><div class="sum-icon">🏆</div>' +
     '<div class="sum-title">Session-Ergebnis</div>' +
     '<div class="sum-sub">'+esc(sess.name)+' · '+doneCount+' Spiele</div></div>' +
     '<div class="sum-sec">' +
-    '<div class="sec-title">Gesamtrangliste</div><div class="rank-card">'+rankHtml+'</div>' +
-    '<div class="sec-title">Finale Abrechnung ('+sess.pv.toString().replace('.',',')+' ct/Pkt)</div>' +
+    '<div class="sec-title">Netto-Gesamtstand</div><div class="rank-card">'+rankHtml+'</div>' +
+    '<div class="sec-title">Finale Verrechnung <span style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">('+sess.pv.toString().replace('.',',')+' ct/Pkt)</span></div>' +
     '<div class="pay-card">'+payHtml+'</div>' +
-    (breakdownRows?'<div class="sec-title">Einzelne Spiele</div><div class="game-breakdown">'+breakdownRows+'</div>':'') +
+    (breakdownRows?'<div class="sec-title">Einzelne Spiele</div><div class="game-breakdown">'+breakdownRows+'</div>':'')+
     '<div class="sum-btns">' +
     '<button class="btn btn-ghost" style="flex:1" onclick="openSession(\''+sess.id+'\')">← Zurück</button>' +
     '<button class="btn btn-p" style="flex:1" onclick="pdfSession()">↗ Teilen</button>' +
@@ -862,7 +882,7 @@ function pdfGame() {
   var settleHtml=settle.length===0?'<p style="color:#666">Keine Zahlungen nötig.</p>':settle.map(function(s){
     return'<div class="pay-line"><span class="from">'+esc(s.from)+'</span><span class="arr">→</span><span class="to">'+esc(s.to)+'</span><span class="amt">'+fmt(s.amt)+'</span></div>';
   }).join('');
-  openPrintWin('🃏 Binockel – '+esc(sess.name)+' / '+esc(g.name), d+' · '+g.rounds.length+' Runden',
+  openPrintWin('🃏 Binokel – '+esc(sess.name)+' / '+esc(g.name), d+' · '+g.rounds.length+' Runden',
     '<table><thead>'+tHead+'</thead><tbody>'+tRows+'<tr class="tot"><td colspan="2">Gesamt</td>'+totCells+'</tr></tbody></table>'+
     '<h3>Abrechnung <small>('+sess.pv.toString().replace('.',',')+' ct/Pkt)</small></h3>'+settleHtml);
 }
@@ -887,7 +907,7 @@ function pdfSession() {
   var d=new Date(sess.ts).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});
   var doneCount=sess.games.filter(function(g){return g.done;}).length;
   var tHead='<tr><th>Spiel</th>'+sess.players.map(function(p){return'<th>'+esc(p.n)+'</th>';}).join('')+'</tr>';
-  openPrintWin('🃏 Binockel Session – '+esc(sess.name), d+' · '+doneCount+' Spiele',
+  openPrintWin('🃏 Binokel Session – '+esc(sess.name), d+' · '+doneCount+' Spiele',
     '<table><thead>'+tHead+'</thead><tbody>'+gameRows+'<tr class="tot"><td><strong>Gesamt</strong></td>'+totCells+'</tr></tbody></table>'+
     '<h3>Finale Abrechnung <small>('+sess.pv.toString().replace('.',',')+' ct/Pkt)</small></h3>'+settleHtml);
 }
@@ -950,51 +970,72 @@ function calcSettle(ranked, pv) {
   return res;
 }
 
-function calcSessionSettle(sess) {
-  // Session settlement based on per-game debts:
-  // 1. For each finished game: compute who owes whom (winner-takes-all per game)
-  // 2. Accumulate all debts in a pairwise net matrix
-  // 3. For each player pair: subtract reverse debts -> one clean net payment direction
-  if (!sess || sess.pv <= 0) return [];
+function calcGameBalanceById(g, players, pv) {
+  // Returns { player_id -> net_euros_this_game } using the same winner-takes-all
+  // logic as calcSettle: the winner collects from each loser (score_diff × pv).
+  var gt = calcTotals(g, players);
+  var ranked = players.map(function(p) {
+    return { id: p.id, n: p.n, t: gt[p.id] || 0 };
+  }).sort(function(a, b) { return b.t - a.t; });
 
-  // net[debtor_id][creditor_id] = total amount debtor owes creditor across all games (in ct)
-  var net = {};
-  sess.players.forEach(function(p) {
-    net[p.id] = {};
-    sess.players.forEach(function(q) { net[p.id][q.id] = 0; });
-  });
+  var bal = {};
+  players.forEach(function(p) { bal[p.id] = 0; });
 
+  var winner = ranked[0];
+  for (var i = 1; i < ranked.length; i++) {
+    var diff = winner.t - ranked[i].t;
+    if (diff > 0 && pv > 0) {
+      var amt = Math.round(diff * pv * 10) / 10;
+      bal[winner.id]     = Math.round((bal[winner.id]     + amt) * 10) / 10;
+      bal[ranked[i].id]  = Math.round((bal[ranked[i].id]  - amt) * 10) / 10;
+    }
+  }
+  return bal;
+}
+
+function calcSessionBalanceMap(sess) {
+  // Net € balance per player: sum of per-game winner-takes-all amounts (same as calcSettle).
+  if (!sess || sess.pv <= 0) return {};
+  var balance = {};
+  sess.players.forEach(function(p) { balance[p.id] = 0; });
   sess.games.forEach(function(g) {
     if (!g.done) return;
-    var gt = calcTotals(g, sess.players);
-    var gRanked = sess.players.map(function(p) {
-      return { id: p.id, t: gt[p.id] || 0 };
-    }).sort(function(a, b) { return b.t - a.t; });
-
-    var winner = gRanked[0];
-    for (var i = 1; i < gRanked.length; i++) {
-      var diff = winner.t - gRanked[i].t;
-      if (diff > 0) {
-        var amt = Math.round(diff * sess.pv * 10) / 10;
-        net[gRanked[i].id][winner.id] =
-          Math.round((net[gRanked[i].id][winner.id] + amt) * 10) / 10;
-      }
-    }
+    var gb = calcGameBalanceById(g, sess.players, sess.pv);
+    sess.players.forEach(function(p) {
+      balance[p.id] = Math.round((balance[p.id] + gb[p.id]) * 10) / 10;
+    });
   });
+  return balance;
+}
 
-  // For each unique player pair: net out mutual debts -> one payment in the net direction
+function calcSessionSettle(sess) {
+  // 1. Accumulate per-game € amounts (winner-takes-all, same as calcSettle per game).
+  // 2. Apply minimum-transaction greedy algorithm for fewest final payments.
+  if (!sess || sess.pv <= 0) return [];
+
+  var balance = calcSessionBalanceMap(sess);
+
+  // Split into creditors (positive) and debtors (negative)
+  var creditors = [], debtors = [];
+  sess.players.forEach(function(p) {
+    var b = balance[p.id];
+    if (b > 0.05)       creditors.push({ n: p.n, id: p.id, amt: b });
+    else if (b < -0.05) debtors.push({   n: p.n, id: p.id, amt: -b });
+  });
+  creditors.sort(function(a, b) { return b.amt - a.amt; });
+  debtors.sort(function(a, b)   { return b.amt - a.amt; });
+
+  // Greedy minimum-transaction settlement
   var result = [];
-  for (var i = 0; i < sess.players.length; i++) {
-    for (var j = i + 1; j < sess.players.length; j++) {
-      var pi = sess.players[i];
-      var pj = sess.players[j];
-      var netVal = Math.round((net[pi.id][pj.id] - net[pj.id][pi.id]) * 10) / 10;
-      if (netVal > 0.05) {
-        result.push({ from: pi.n, to: pj.n, amt: netVal });
-      } else if (netVal < -0.05) {
-        result.push({ from: pj.n, to: pi.n, amt: Math.round(-netVal * 10) / 10 });
-      }
-    }
+  var ci = 0, di = 0;
+  while (ci < creditors.length && di < debtors.length) {
+    var c = creditors[ci], d = debtors[di];
+    var pay = Math.round(Math.min(c.amt, d.amt) * 10) / 10;
+    if (pay > 0.05) result.push({ from: d.n, to: c.n, amt: pay });
+    c.amt = Math.round((c.amt - pay) * 10) / 10;
+    d.amt = Math.round((d.amt - pay) * 10) / 10;
+    if (c.amt <= 0.05) ci++;
+    if (d.amt <= 0.05) di++;
   }
   return result;
 }
