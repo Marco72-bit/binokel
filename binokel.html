@@ -278,6 +278,7 @@ function home() {
       '<div class="gcard-info"><span>📅 '+d+'</span><span>♟️ '+sess.games.length+' Spiele</span><span>👥 '+sess.players.map(function(p){return esc(p.n);}).join(' · ')+'</span></div>' +
       '<div class="gcard-actions" onclick="event.stopPropagation()">' +
       '<button class="gcard-act gcard-act-share" onclick="pdfSessionById(\''+sess.id+'\')">↗ Teilen</button>' +
+      (sess.done ? '<button class="gcard-act gcard-act-share" onclick="renameSession(\''+sess.id+'\')">✏ Umbenennen</button>' : '') +
       '<button class="gcard-act gcard-act-del" onclick="deleteSession(\''+sess.id+'\')">✕ Löschen</button>' +
       '</div></div>';
   }).join('');
@@ -859,6 +860,37 @@ function confirmDeleteSession(id) {
   save(); closeOverlay(); home();
 }
 
+function renameSession(id) {
+  var sess=S.sessions.find(function(s){return s.id===id;}); if(!sess)return;
+  document.getElementById('sheet').innerHTML =
+    '<div class="sheet-pip"></div>'+
+    '<div class="sheet-title">Session umbenennen</div>'+
+    '<div class="sheet-sub">Aktueller Name: <strong>'+esc(sess.name)+'</strong></div>'+
+    '<div style="padding:0 0 12px">'+
+    '<label class="lbl">Neuer Name</label>'+
+    '<input id="rename-inp" type="text" class="inp" value="'+esc(sess.name)+'" maxlength="40" '+
+      'style="width:100%;box-sizing:border-box" '+
+      'onkeydown="if(event.key===\'Enter\')confirmRenameSession(\''+id+'\')">'+
+    '</div>'+
+    '<div class="btn-row">'+
+    '<button class="btn btn-ghost" style="flex:1" onclick="closeOverlay()">Abbrechen</button>'+
+    '<button class="btn btn-p" style="flex:1" onclick="confirmRenameSession(\''+id+'\')">Speichern</button>'+
+    '</div>';
+  openOverlay();
+  setTimeout(function(){
+    var inp=document.getElementById('rename-inp');
+    if(inp){inp.focus();inp.select();}
+  },120);
+}
+function confirmRenameSession(id) {
+  var inp=document.getElementById('rename-inp');
+  var newName=(inp?inp.value:'').trim();
+  if(!newName)return;
+  var sess=S.sessions.find(function(s){return s.id===id;}); if(!sess)return;
+  sess.name=newName;
+  save(); closeOverlay(); home();
+}
+
 /* ===== PDF EXPORT ===== */
 function pdfGame() {
   var sess=cs(); var g=cg(); if(!sess||!g)return;
@@ -919,6 +951,7 @@ function pdfSessionById(id) {
 }
 
 function openPrintWin(title, sub, body) {
+  var appUrl = window.location.href;
   var w=window.open('','_blank');
   if(!w){alert('Bitte Pop-ups erlauben.');return;}
   w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+title+'</title><style>'+
@@ -933,9 +966,14 @@ function openPrintWin(title, sub, body) {
     'h3{font-size:14px;margin-bottom:10px;color:#333}h3 small{font-weight:400;color:#888;font-size:12px}'+
     '.pay-line{display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid #eee;border-radius:6px;margin-bottom:6px;background:#fafafa}'+
     '.from{font-weight:500;min-width:80px}.arr{color:#999}.to{color:#c9a84c;font-weight:600;flex:1}.amt{font-weight:700;color:#2a7a35}'+
-    '@media print{body{padding:10px}@page{margin:15mm}}'+
+    '.back-btn{display:inline-flex;align-items:center;gap:8px;margin-top:24px;padding:11px 20px;background:#c9a84c;color:#0a0a0a;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;text-decoration:none;font-family:system-ui,sans-serif}'+
+    '.back-btn:hover{opacity:.85}'+
+    '@media print{.back-btn{display:none}body{padding:10px}@page{margin:15mm}}'+
     '</style></head><body>'+
     '<h1>'+title+'</h1><p class="sub">'+sub+'</p>'+body+
+    '<div style="margin-top:28px;padding-top:20px;border-top:1px solid #eee">'+
+    '<button class="back-btn" onclick="if(window.opener&&!window.opener.closed){window.opener.focus();window.close();}else{window.location.href=appUrl;}">\u2190 Zur\u00fcck zur App</button>'+
+    '</div>'+
     '</body></html>');
   w.document.close();
   setTimeout(function(){w.print();},400);
